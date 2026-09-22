@@ -1,0 +1,215 @@
+---
+title: "230941_RAJ_SAURAV"
+author: "Assignment 1"
+date: "2025-09-10"
+output: pdf_document
+---
+
+## Question 2.1
+
+### Ques.2.1(a)
+
+```{r Q2_1_a, echo=TRUE}
+library(astsa)
+library(ggplot2)
+
+trend <- time(jj) - 1970
+xt <- log(jj)
+Q <- factor(cycle(jj))
+reg <- lm(xt ~ 0 + trend + Q) 
+model.matrix(reg)
+summary(reg)
+```
+
+### Ques.2.1(b)
+
+Estimated average annual Increase in log(EPS) is: 0.167
+
+```{r Q2_1_b, echo=TRUE}
+avg_annual_increase <- coef(reg)["trend"]
+cat("Average annual Increase in log(EPS) is: ", avg_annual_increase, "\n")
+```
+
+### Ques.2.1(c)
+
+The average logged earnings rate will decrease by 23.57% as we go from the third quarter to the fourth quarter
+
+```{r Q2_1_c, echo=TRUE}
+log_eps_Q3 <- coef(reg)["Q3"]
+log_eps_Q4 <- coef(reg)["Q4"]
+change <- (log_eps_Q4 - log_eps_Q3)
+percent_dec <- (exp(change) - 1) * 100
+
+cat("Average logged earning rate decreases from the Q3 to Q4 by:", abs(percent_dec),"%")
+```
+
+### Ques.2.1(d)
+
+If we include the intercept then the model automatically removed average logged ERP of Q1 and taken Q2, Q3, Q4 as difference from $\beta_0$ or Q1. trend coefficient still remains the same.
+
+```{r Q2_1_d, echo=TRUE}
+# add intercept in the model
+reg2 <- lm(log(jj) ~ trend + Q)
+summary(reg2)
+```
+
+We can not include all four quartery dummies Q1, Q2, Q3 and Q4 along with an intercept because of perfect multicollinearity: $$
+Q1 + Q2 + Q3 + Q4 = 1
+$$ so if we include intercept then sum of the dummies equals the intercept that is the intercept is exactly a linear combination of the dummies, so including all of them would make the design matrix singular.
+
+R handled it by automatically dropping one dummy (Q1) which serves as the baseline quarters.
+
+### Ques.2.1(e)
+
+```{r Q2_1_e, echo=TRUE}
+df <- data.frame(
+  t = time(jj),          
+  x_t = xt,     
+  x_hat_t = fitted(reg)   
+)
+
+ggplot(df, aes(x = t))+
+  geom_line(aes(y = x_t, color = "Observed"), size=1)+
+  geom_point(aes(y = x_t, color="Observed"), size=2) +
+  geom_line(aes(y = x_hat_t, color = "Fitted"), size = 1, alpha = 0.7)+
+  labs(y = "log(EPS)", x = "Year", title = "Observed vs Fitted Log EPS") +
+  scale_color_manual(values=c("Observed"="black", "Fitted"="red")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+```
+
+Examine the Residual (xt - xt_hat)
+
+```{r Q2_1_e_2, echo=TRUE}
+wt_hat <- resid(reg)
+#plot
+ts.plot(wt_hat, ylab="Residuals", main="Residuals (w_t_hat)")
+abline(h=0, col="blue", lty=2)
+
+# ACF
+acf(wt_hat, main="ACF of Residuals")
+```
+
+Conclusion: The ACF shows a large positive lag-1 spike (goes outside confidence interval band) and significant peaks at seasonal lags (multiples of 4), with a slow decay. This indicates remaining serial and seasonal dependence.
+
+The model fits the data well in terms of R-Squared and significance, but the residuals are not white since the ACF shows strong autocorrelation.
+
+## Questtion 2.2
+
+### Ques.2.2(a)
+
+```{r Q2_2_a, echo=TRUE}
+# Data Import
+ctemp <- tempr - mean(tempr)
+temp2 <- ctemp^2
+trend <- time(cmort)
+
+part_lag4 <- ts(c(rep(NA, 4), head(as.numeric(part), -4)), start = start(part), frequency = frequency(part))
+
+data_lagged_ts <- ts.intersect(
+  cmort = cmort,
+  trend = trend,
+  ctemp = ctemp,
+  temp2 = temp2,
+  part = part,
+  part_lag4 = part_lag4
+)
+
+data_lagged_df <- na.omit(as.data.frame(data_lagged_ts))
+
+fit_old <- lm(cmort ~ trend + ctemp + temp2 + part, data = data_lagged_df)
+fit_new <- lm(cmort ~ trend + ctemp + temp2 + part + part_lag4, data = data_lagged_df)
+
+summary(fit_old)
+summary(fit_new)
+```
+
+Conclusion:
+Four-week lag of particulates (part_lag4) shows a positive effect on cmort with an estimate of 0.103 (SE = 0.0248, t Value= 4.147, p < 0.001). R-squared slightly increases from 0.594 to 0.604 and residual error decreases, indicating a modest improvement in model fit. Hence, past pollution contributes measurably to current mortality, highlighting the importance of considering lagged exposures.
+
+### Ques.2.2(b)
+
+```{r Q2_2_b_1, echo=TRUE}
+# scatter plot
+pairs(cbind(
+  Mortality=cmort, 
+  Temperature=tempr, 
+  Particulates=part, 
+  LaggedPart = part_lag4),
+  main = "Scatterplot Matrix of Mt, Tt, Pt, and Pt4")
+
+```
+
+PairWise Correlations: 
+
+```{r Q2_2_b_2, echo=TRUE}
+data <- data.frame(
+  Mt = data_lagged_df$cmort,
+  Tt = data_lagged_df$ctemp + mean(tempr),
+  Pt = data_lagged_df$part,
+  Pt4 = data_lagged_df$part_lag4
+)
+
+cor_matrix <- cor(data)
+print(cor_matrix)
+
+```
+
+Mt is more strongly correlated with Pt4 than with Pt suggesting a stronger association with pt4.
+Both correlations are moderate and positive, so a meaningful association exists but much variation remains unexplained.
+
+Pt and Pt4 are themselves correlated (r = 0.534), so including both in a regression may cause multicollinearity.
+
+## Question 2.3
+
+```{r Q2_3_a, echo=TRUE}
+set.seed(154)
+mu <- 0.01
+sigma <- 1
+n <- 100
+time_vec <- 1:n
+
+par(mfrow= c(2, 2), mar = c(2.5, 2.5, 1, 1.5)+ 0.5, mgp = c(1.6, .6, 0))
+
+estimates <- numeric(4)
+for(i in 1:4) {
+  x <- ts(cumsum(rnorm(n, mean = mu, sd = sigma)))
+  regx <- lm(x ~ 0 + time(x))   
+  estimates[i] <- coef(regx)[1]
+  
+  plot(x, ylab = "Random walk w/ drift", xlab = "Time")
+  abline(a = 0, b = mu, col = 2, lty = 2)  
+  abline(regx, col = 4, lwd = 2)            
+  title(main = paste("Series", i, "- est drift =", round(estimates[i], 4)))
+}
+
+print(estimates)
+
+```
+
+### Ques.2.3(b)
+
+```{r Q2_3_b, echo=TRUE}
+par(mfrow = c(2, 2), mar = c(2.5, 2.5, 1, 1.5)+0.5, mgp = c(1.6, 0.6, 0))
+
+estimates_b <- numeric(4)
+
+for(i in 1:4){
+  w_b <- rnorm(n, mean = 0, sd = sigma)
+  y <- mu * time_vec + w_b
+  regy <- lm(y ~ 0 + time_vec)
+  estimates_b[i] <- coef(regy)[1]
+  plot(time_vec, y, type = "l", ylab = "Linear trend + noise", xlab = "Time")
+  abline(a = 0, b = mu, col = 2, lty = 2)
+  abline(regy, col = 4, lwd = 2)
+  title(main = paste("Series", i, "- est slope =", round(estimates_b[i],4)))
+}
+
+print(estimates_b)
+```
+
+### Ques.2.3(c)
+
+From this assignment, I learned how to estimate trends and seasonal effects using regression with and without intercepts, and how R handles multicollinearity by dropping one dummy variable. I observed that mortality and EPS data can show meaningful patterns over time, but residual analysis is essential to check model adequacy. The random walk and linear trend simulations helped me understand drift, fitted lines, and the effect of noise on time series. Overall, I gained confidence in interpreting model coefficients, plotting fitted versus observed values, and assessing residual behavior.
+
+

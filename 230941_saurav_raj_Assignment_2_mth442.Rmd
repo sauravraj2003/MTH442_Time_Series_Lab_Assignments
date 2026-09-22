@@ -1,0 +1,216 @@
+---
+title: "Assignment 2"
+author: "Saurav Raj (230941)"
+date: "2025-10-10"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Question 2.10
+
+## Libraries to load
+
+```{r setup}
+library(astsa)
+```
+
+## Part (a)
+```{r plot_data}
+ts.plot(oil, gas, col = c("black", "red"), 
+        main = "Weekly Crude Oil and Gasoline Prices",
+        ylab = "Price (Oil: $/barrel, Gas: cents/gallon)")
+legend("topleft", legend = c("Oil", "Gas"), col = c("black", "red"), lty = 1)
+```
+
+These series most resemble the random walk model. Like a random walk, they do not have a fixed mean and exhibit long, wandering movements and strong, persistent trends over time. They do not look like stationary white noise, which would fluctuate randomly around a constant mean.
+
+Ques.) Do you believe the series are stationary?
+
+No, the series are not stationary. A time series is stationary if its statistical properties (specifically the mean and variance) are constant over time.
+
+From the plot, it can be clearly seen that:
+
+-   The mean is not constant: Since both the oil and gas series show a distinct upward trend. The average price is clearly increasing over the period shown, violating the condition of a constant mean.
+
+-   The variance might not be constant: The magnitude of the fluctuations appears to change over time, possibly increasing as the price level rises.
+
+Because the mean is clearly time-dependent, the series fail the primary condition for stationarity.
+
+## Part (b)
+
+Applying a logarithmic transformation, $y_t = \log(x_t)$, is a common and important step in economics and financial time series because :
+
+- **It Converts Absolute Changes to Relative (Percentage) Changes**
+
+the percentage change, is often more meaningful than the raw price change.
+
+Let $x_t$ be the price at time $t$ and $x_{t-1}$ be the price at time $t-1$. The percentage change (or return), $r_t$, is defined as:
+
+$$
+r_t = \frac{x_t - x_{t-1}}{x_{t-1}}
+$$
+
+Now, difference of the log-transformed series:
+
+$$
+\log(x_t) - \log(x_{t-1}) = \log\left(\frac{x_t}{x_{t-1}}\right)
+$$
+
+From the definition of return, we can write $\frac{x_t}{x_{t-1}} = 1 + r_t$. Substituting this into the log-difference equation gives:
+
+$$
+\log(x_t) - \log(x_{t-1}) = \log(1 + r_t)
+$$
+
+For small values of $r_t$ (which is typical for high-frequency data like weekly price changes),we take approximation: $\log(1 + r_t) \approx r_t$.
+
+Therefore, we have the convenient result:
+
+$$
+\log(x_t) - \log(x_{t-1}) \approx r_t
+$$
+
+This means that by taking the first difference of the log-transformed price series, we are effectively analyzing the weekly returns, which is often the primary quantity of interest.
+
+- **It Helps to Stabilize the Variance**
+
+As observed in part (a) of the problem, raw price series are typically not stationary. A common feature is that the variance increases as the price level itself increases.
+
+A log-transformation compresses the scale of the data. Larger values are pulled down more significantly than smaller values, which makes the variance of the series more constant over time. Stabilizing the variance is a crucial step in transforming a non-stationary series into a stationary one. This transformation is typically used in conjunction with differencing to remove trends.
+
+
+## Part(c)
+
+Data Transformation:
+
+```{r transform_data}
+poil = diff(log(oil))
+pgas = diff(log(gas))
+```
+
+Next, plot of two transformed series on the same graph.
+
+```{r plot_transformed_data}
+ts.plot(poil, pgas, col = c("black", "red"),
+        main = "Weekly Returns for Oil and Gas Prices",
+        ylab = "Log Price Difference")
+legend("topleft", legend = c("Oil Returns (poil)", "Gas Returns (pgas)"), 
+       col = c("black", "red"), lty = 1)
+```
+
+Now, the sample ACF for each of the transformed series :
+
+```{r acf_plots}
+par(mfrow = c(2, 1)) 
+acf(poil, main = "ACF of Oil Returns")
+acf(pgas, main = "ACF of Gas Returns")
+par(mfrow = c(1, 1)) # reset
+```
+
+### Comments on the Results
+
+- **Transformed Data Plot:** The plot of the transformed series (weekly returns) looks much more **stationary** than the original price series from part (a). The series now fluctuate around a constant mean (approximately zero) and the variance appears much more stable over time. Hence, This confirms that the log-difference transformation was effective in removing the trend and stabilizing the variance.
+
+- **Sample ACFs:** The ACF plots for both `poil` and `pgas` show very little significant autocorrelation. For both series, nearly all the autocorrelation spikes are within the blue dashed significance bounds, which is characteristic of a white noise process. This suggests that the transformed data are largely unpredictable from their own past values. The lack of significant autocorrelation supports the idea that the original `oil` and `gas` price series can be reasonably modeled as **random walks**.
+
+
+## Part (d)
+
+```{r plot_ccf}
+ccf(poil, pgas, main = "CCF of Oil Returns vs. Gas Returns")
+```
+
+### Comments on the Results
+
+The CCF plot shows the correlation between the two series at various lags. In`ccf(x, y)` function, negative lags indicate that series `x` (in this case, `poil`) leads series `y` (`pgas`), while positive lags indicate that `y` leads `x`.
+
+- **Correlation at Lag 0 :** There is a very strong and significant positive correlation at Lag 0 (approximately 0.66). This indicates that changes in oil and gas prices have a strong tendency to move in the same direction within the same week. This is expected, as gasoline is a direct derivative of crude oil.
+
+- **Negative Lags:** There is a small but statistically significant positive correlation at Lag -1. This suggests that a change in the price of oil in one week has some predictive power for the change in the price of gas in the following week.
+
+- **Feedback (Positive Lags):** There are small, but significant, correlations at a few positive lags (e.g., Lag 3). A positive lag means that past values of `pgas` are correlated with current values of `poil`. This can be interpreted as **feedback** from the gasoline market to the crude oil market. While the effect is not as strong as the contemporaneous link, it might suggest that factors affecting the refined gasoline market (like demand or inventory levels) can have a delayed, minor impact on crude oil prices.
+
+## Part (e)
+
+```{r plot_lagged_scatter}
+lag2.plot(poil, pgas, max.lag = 3)
+```
+
+### Comments on the Results
+This plots shows scatterplots of weekly gas returns ($y_t$) versus weekly oil returns at various leads ($x_{t-k}$ for $k=0, 1, 2, 3$).
+
+1. **Linearity:** The relationship between the two series, as indicated by the red line, appears to be predominantly linear. For lag 0 and 1, The curve follows a fairly straight, upward-sloping line in these plots, which aligns with the significant positive correlations we found in the CCF analysis. For Lags 2 and 3, the relationship is much weaker and the smoother is nearly flat, suggesting little to no linear association.
+
+2. **Outliers:** There are several significant outliers visible in all the plots. These points are located far from the central cluster of data and represent weeks where there were exceptionally large changes (both positive and negative) in the price of oil or gas. These extreme events can have a strong influence on any fitted model and are an important feature of financial and commodity data. Like, in the Lag 0 plot, there are points corresponding to weekly returns greater than 20% which are far from the typical weekly change.
+
+## Part (f)
+
+### Part (f.1)
+
+```{r data_prep}
+poil = diff(log(oil))
+pgas = diff(log(gas))
+
+indi = ifelse(poil < 0, 0, 1)
+
+mess = ts.intersect(pgas, poil, poilL = lag(poil, -1), indi, dframe = TRUE)
+
+fit = lm(pgas ~ poil + poilL + indi, data = mess)
+summary(fit)
+```
+
+### Comments on the Results
+
+The regression output provides estimates for the model:
+$G_t = \beta_0 + \beta_1 I_t + \alpha_1 O_t + \alpha_2 O_{t-1} + w_t$
+
+From the `Coefficients` table:
+
+-  **Intercept ($\beta_0$):** The intercept is `-0.006445`. This is the baseline intercept when `indi = 0` (i.e., when oil prices are falling). It is statistically significant (p-value = 0.063, which is marginally significant at the 10% level).
+
+- **`poil` ($\alpha_1$):** The coefficient for the current oil growth rate is `0.683`. It is highly significant (p-value < 2e-16), indicating a strong, positive contemporaneous relationship.
+
+- **`poilL` ($\alpha_2$):** The coefficient for the lagged oil growth rate is `0.112`. It is also highly significant (p-value = 0.00385), suggesting that last week's oil price change still has an effect on this week's gas price.
+
+- **`indi` ($\beta_1$):** The coefficient for the indicator variable is `0.012368`. This term is statistically significant (p-value = 0.02534). Since the p-value is less than 0.05, this result suggests for an asymmetric effect. Specifically, when oil prices are rising (`indi = 1`), the intercept of the model shifts up by `0.012368`. This suggests that the baseline response of gas prices is different when oil prices rise compared to when they fall.
+
+5.  **Overall Model Fit:** The Multiple R-squared is 0.4563, meaning the model explains about 45.6% of the variance in gasoline price changes, which is a reasonable fit for this type of data. The F-statistic is very large with a tiny p-value, indicating that the model as a whole is statistically significant.
+
+
+### Part (f.2)
+
+Fitted Model for Negative Growth in Oil Price ($O_t < 0$):
+
+When the oil price is falling, the indicator variable $I_t$ is 0. The model simplifies to:
+$\hat{G}_t = \hat{\beta}_0 + \hat{\alpha}_1 O_t + \hat{\alpha}_2 O_{t-1}$
+Plugging in the coefficients from the summary table:
+$\hat{G}_t = -0.0064 + 0.683 O_t + 0.112 O_{t-1}$
+
+Fitted Model for No or Positive Growth in Oil Price ($O_t \ge 0$):
+
+When the oil price is flat or rising, the indicator variable $I_t$ is 1. The model's intercept becomes $(\hat{\beta}_0 + \hat{\beta}_1)$:
+$\hat{G}_t = (\hat{\beta}_0 + \hat{\beta}_1) + \hat{\alpha}_1 O_t + \hat{\alpha}_2 O_{t-1}$
+The new intercept is $-0.006445 + 0.012368 = 0.005923$.
+Plugging in the coefficients:
+$\hat{G}_t = 0.0059 + 0.683 O_t + 0.112 O_{t-1}$
+
+Conclusion on the Asymmetry Hypothesis:
+
+Yes, the results support the asymmetry hypothesis. The `indi` coefficient is statistically significant (p-value = 0.025), which means the model has a different intercept depending on whether oil prices fall or rise. This different baseline response confirms the asymmetry.
+
+## Part (f.3)
+
+```{r residual_analysis}
+plot.ts(resid(fit), main = "Residuals of the Regression Model", ylab = "Residuals")
+
+acf(resid(fit), main = "ACF of Residuals")
+```
+
+#### Comments on the Residuals
+
+1.  **Time Series Plot:** The plot of the residuals shows that they are centered around zero and appear to have a constant variance, with the exception of a few very large outliers. These outliers correspond to the extreme events we noted in part (e) and indicate that the model does not capture these rare, high-volatility weeks very well.
+
+2.  **ACF Plot:** The ACF of the residuals shows no significant spikes that cross the blue confidence bands for any lags greater than zero. it suggests that the residuals are not autocorrelated. In other words, our regression model has successfully captured the linear, time-dependent structure between the oil and gas price growth rates.
+
+**Overall Conclusion:** Aside from the problem of the large outliers, the residual analysis suggests the model is a decent fit. The error term $w_t$ appears to be uncorrelated over time, satisfying a key assumption of the regression model.
